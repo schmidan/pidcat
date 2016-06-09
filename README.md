@@ -1,3 +1,8 @@
+Ignore file addition
+=======
+
+added support for $(HOME)/.pidcatignore file. Example File can be found in Repository
+
 PID Cat
 =======
 
