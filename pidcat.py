@@ -24,6 +24,7 @@ limitations under the License.
 import argparse
 import sys
 import re
+import os
 import subprocess
 from subprocess import PIPE
 
@@ -45,29 +46,17 @@ parser.add_argument('-c', '--clear', dest='clear_logcat', action='store_true', h
 parser.add_argument('-t', '--tag', dest='tag', action='append', help='Filter output by specified tag(s)')
 parser.add_argument('-i', '--ignore-tag', dest='ignored_tag', action='append', help='Filter output by ignoring specified tag(s)')
 parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__, help='Print the version number and exit')
-parser.add_argument('-a', '--all', dest='all', action='store_true', default=False, help='Print all log messages')
+parser.add_argument('-il', '--ignore-list', dest='ignore_list', action='append', help='Do not filter by ignore list file (.pidcatignore)')
 
 args = parser.parse_args()
 min_level = LOG_LEVELS_MAP[args.min_level.upper()]
 
 package = args.package
 
-base_adb_command = ['adb']
-if args.device_serial:
-  base_adb_command.extend(['-s', args.device_serial])
-if args.use_device:
-  base_adb_command.append('-d')
-if args.use_emulator:
-  base_adb_command.append('-e')
-
 if args.current_app:
-  system_dump_command = base_adb_command + ["shell", "dumpsys", "activity", "activities"]
-  system_dump = subprocess.Popen(system_dump_command, stdout=PIPE, stderr=PIPE).communicate()[0]
-  running_package_name = re.search(".*TaskRecord.*A[= ]([^ ^}]*)", system_dump).group(1)
+  system_dump = subprocess.Popen('adb shell dumpsys activity activities', shell=True, stdout=PIPE, stderr=PIPE).communicate()[0]
+  running_package_name = re.search(".*Recent.*A=([^ ]*)", system_dump).group(1)
   package.append(running_package_name)
-
-if len(package) == 0:
-  args.all = True
 
 # Store the names of packages for which to match all processes.
 catchall_package = filter(lambda package: package.find(":") == -1, package)
@@ -127,6 +116,8 @@ KNOWN_TAGS = {
   'StrictMode': WHITE,
   'DEBUG': YELLOW,
 }
+IGNORE_TAGS = [line for line in open(os.getenv('HOME',"")+'/.pidcatignore', 'r').read().split("\n") if not line.startswith("#") and line.strip()]
+
 
 def allocate_color(tag):
   # this will allocate a unique format for the given tag
@@ -164,7 +155,7 @@ TAGTYPES = {
   'F': colorize(' F ', fg=BLACK, bg=RED),
 }
 
-PID_LINE = re.compile(r'^\w+\s+(\w+)\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w\s([\w|\.|\/]+)$')
+PID_LINE = re.compile(r'^\w+\s+(\w+)\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w\s([\w|\.]+)$')
 PID_START = re.compile(r'^.*: Start proc ([a-zA-Z0-9._:]+) for ([a-z]+ [^:]+): pid=(\d+) uid=(\d+) gids=(.*)$')
 PID_START_5_1 = re.compile(r'^.*: Start proc (\d+):([a-zA-Z0-9._:]+)/[a-z0-9]+ for (.*)$')
 PID_START_DALVIK = re.compile(r'^E/dalvikvm\(\s*(\d+)\): >>>>> ([a-zA-Z0-9._:]+) \[ userId:0 \| appId:(\d+) \]$')
@@ -175,9 +166,15 @@ LOG_LINE  = re.compile(r'^([A-Z])/(.+?)\( *(\d+)\): (.*?)$')
 BUG_LINE  = re.compile(r'.*nativeGetEnabledTags.*')
 BACKTRACE_LINE = re.compile(r'^#(.*?)pc\s(.*?)$')
 
+base_adb_command = ['adb']
+if args.device_serial:
+  base_adb_command.extend(['-s', args.device_serial])
+if args.use_device:
+  base_adb_command.append('-d')
+if args.use_emulator:
+  base_adb_command.append('-e')
 adb_command = base_adb_command[:]
 adb_command.append('logcat')
-adb_command.extend(['-v', 'brief'])
 
 # Clear log before starting logcat
 if args.clear_logcat:
@@ -254,7 +251,7 @@ def tag_in_tags_regex(tag, tags):
 
 ps_command = base_adb_command + ['shell', 'ps']
 ps_pid = subprocess.Popen(ps_command, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-while True:
+while ps_pid.poll() is None:
   try:
     line = ps_pid.stdout.readline().decode('utf-8', 'replace').strip()
   except KeyboardInterrupt:
@@ -322,7 +319,7 @@ while adb.poll() is None:
       message = message.lstrip()
       owner = app_pid
 
-  if not args.all and owner not in pids:
+  if owner not in pids:
     continue
   if level in LOG_LEVELS_MAP and LOG_LEVELS_MAP[level] < min_level:
     continue
@@ -330,19 +327,20 @@ while adb.poll() is None:
     continue
   if args.tag and not tag_in_tags_regex(tag, args.tag):
     continue
+  if tag_in_tags_regex(tag, IGNORE_TAGS):
+    continue
 
   linebuf = ''
 
-  if args.tag_width > 0:
-    # right-align tag title and allocate color if needed
-    if tag != last_tag or args.always_tags:
-      last_tag = tag
-      color = allocate_color(tag)
-      tag = tag[-args.tag_width:].rjust(args.tag_width)
-      linebuf += colorize(tag, fg=color)
-    else:
-      linebuf += ' ' * args.tag_width
-    linebuf += ' '
+  # right-align tag title and allocate color if needed
+  if tag != last_tag or args.always_tags:
+    last_tag = tag
+    color = allocate_color(tag)
+    tag = tag[-args.tag_width:].rjust(args.tag_width)
+    linebuf += colorize(tag, fg=color)
+  else:
+    linebuf += ' ' * args.tag_width
+  linebuf += ' '
 
   # write out level colored edge
   if level in TAGTYPES:

@@ -1,0 +1,69 @@
+# This list provides various ignore tags. Comment the ones you don't want to ignore, or add new ones.
+
+#howto pidcat.py changes
+# 
+# import os
+#
+#KNOWN_TAGS = {
+#  'dalvikvm': WHITE,
+#  'Process': WHITE,
+#  'ActivityManager': WHITE,
+#  'ActivityThread': WHITE,
+#  'AndroidRuntime': CYAN,
+#  'jdwp': WHITE,
+#  'StrictMode': WHITE,
+#  'DEBUG': YELLOW,
+#}
+# --> IGNORE_TAGS = [line for line in open(os.getenv('HOME',"")+'/.pidcatignore', 'r').read().split("\n") if not line.startswith("#") and line.strip()]
+#
+#   if args.tag and not tag_in_tags_regex(tag, args.tag):
+#     continue
+# --> if tag_in_tags_regex(tag, IGNORE_TAGS):
+#	-->   continue
+#
+#
+
+
+
+# System generic tags
+ 
+InputEventReceiver
+Perf
+Performance
+PhoneWindow
+PowerManager
+SQLiteDatabase
+ViewRootImpl
+ 
+MALI
+MaliEGL
+PathParser
+GraphicBuffer
+
+# Ignore GPU related garbage
+ 
+Adreno200-EGL
+Adreno-EGL
+OpenGLRenderer
+ 
+ 
+# Other Drivers info
+
+PrintK
+SensorManager
+
+
+# Genymotion Ignore list
+
+EGL_emulation
+EGL_genymotion
+libEGL
+
+#wiko ignore list
+Surface
+
+# Ignore low-level logging
+
+art
+libc
+qdmemalloc
